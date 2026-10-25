@@ -78,6 +78,16 @@ Never copy host-specific instructions or settings into source files.
 Keep reports and scratch files outside the checkout.
 Wait for authorization before you push, open a PR, run benchmarks, or build features.
 
+## Agent workflow
+
+Use the [agent workflow](docs/agent-workflow.md) for nontrivial engineering work.
+At session start, locate the source through the private bootstrap file. Then read the entry file and the matched playbook at the pin.
+Give each child the pin, the playbook path, and the steps that it owns.
+Record stage evidence for each playbook step in the PR or the final report.
+Declare each skipped or not-applicable step with its reason.
+Do not claim a step, playbook, principle, or skill that you did not complete or read.
+The rules in this file override upstream defaults.
+
 ## Agent policy
 
 These rules are instructions that guide agents.

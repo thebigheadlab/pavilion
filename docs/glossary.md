@@ -65,11 +65,18 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 
 | Term | Meaning |
 | --- | --- |
+| Agent workflow | The set of upstream agent skills and playbooks that Pavilion uses at the pin. See [Agent workflow](agent-workflow.md). |
 | Author and reviewer separation | The rule that a reviewer is a different agent than the author and runs a different model. |
+| Bootstrap file | A private file outside the repository that names the agent workflow source. The Coordinator gives its path as the `PAVILION_WORKFLOW_SOURCE` value in each task. |
+| Child | An agent that another agent starts and gives work to. |
 | Coordinator | An agent that assigns work and does not do the work. A Coordinator always uses low effort. |
+| Entry file | The first agent workflow file that an agent reads at session start. The [Pin](agent-workflow.md#pin) table names it. |
 | Exact candidate | One commit, named by a 40-hex SHA, that a review covers. Evidence for another SHA is stale. |
 | Lane | A group of agents under one Coordinator. A Lane holds at most 3 agents. |
+| Pin | The exact upstream commit SHA that Pavilion uses for the agent workflow. |
+| Playbook | An upstream file that gives the ordered steps for one type of task. |
 | Reserved wait | A slot held for an agent that waits for a result. It counts toward the Lane and global caps. |
+| Stage evidence | A record that shows the result of one playbook step: `done` with evidence, `skip: <reason>`, or `n/a: <reason>`. |
 | Worker | An agent that does assigned work. A Worker uses medium effort unless the request gives evidence, scope, and a stop condition. |
 
 ## Writing reference
