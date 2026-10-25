@@ -39,7 +39,8 @@ The policy denies the Cursor models composer, claude, gemini, and auto.
 - A Coordinator request passes the same provider, model, and purpose checks as a Worker request.
 - Author and reviewer must be different. They need different agent IDs and different models.
 - A reviewer role must include review. Sonnet fails this check by default.
-- Review evidence must name an Exact candidate. The checker rejects a stale SHA.
+- Review evidence must name an Exact candidate. The checker rejects a stale SHA. The candidate SHA and the head SHA must be strings of 40 lowercase hex characters.
+- A raised effort needs `evidence`, `scope`, and `stop_condition`. Each must be a non-empty string.
 
 ## Run the check
 
@@ -48,7 +49,7 @@ python3 scripts/agent_policy.py request.json ledger.json
 ```
 
 The request file holds one JSON object.
-The ledger file holds a JSON list of active or reserved agents. Each entry has `agent_id`, `lane`, and `state`.
+The ledger file holds a JSON list of active or reserved agents. Each entry has `agent_id`, `lane`, and `state`. `agent_id` and `lane` must be non-empty strings. `state`, if present, must be a non-empty string.
 The exit status is 0 for admitted, 1 for rejected, and 2 for an input error.
 A wrong data type, such as a request that is not an object, is an input error.
 Use synthetic IDs such as `actor-001` in requests and ledgers.

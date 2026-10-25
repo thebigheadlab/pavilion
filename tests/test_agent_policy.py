@@ -147,6 +147,30 @@ class AdmitTests(unittest.TestCase):
             with self.assertRaises(policy.InputError, msg=(request, active)):
                 policy.admit(request, active)
 
+    def test_ledger_entries_need_identity(self):
+        for entry in ({}, {"lane": "lane-001"}, {"agent_id": "actor-100"},
+                      {"agent_id": "", "lane": "lane-001"}, {"agent_id": "actor-100", "lane": " "},
+                      {"agent_id": 5, "lane": "lane-001"}, {"agent_id": "actor-100", "lane": 1},
+                      {"agent_id": "actor-100", "lane": "lane-001", "state": ""},
+                      {"agent_id": "actor-100", "lane": "lane-001", "state": 3}):
+            with self.assertRaises(policy.InputError, msg=entry):
+                policy.admit(worker(), [entry])
+
+    def test_escalation_fields_must_be_strings(self):
+        for bad in (True, 1, ["x"], {"a": 1}, "  "):
+            self.reject(worker(effort="high", evidence=bad, scope="s-001", stop_condition="c-001"), "raised effort needs evidence")
+            self.reject(worker(effort="high", evidence="e-001", scope=bad, stop_condition="c-001"), "raised effort needs scope")
+            self.reject(worker(effort="high", evidence="e-001", scope="s-001", stop_condition=bad), "raised effort needs stop_condition")
+
+    def test_sha_must_be_string(self):
+        for bad in (12345, True, ["a"]):
+            with self.assertRaises(policy.InputError, msg=bad):
+                policy.admit(review(head_sha=bad), [])
+            with self.assertRaises(policy.InputError, msg=bad):
+                policy.admit(review(evidence={"candidate_sha": bad}), [])
+        padded = review(head_sha=" " + SHA_A + " ")
+        self.assertTrue(policy.admit(padded, [])["admitted"])
+
     def test_lane_cap(self):
         self.assertTrue(policy.admit(worker(), ledger(2))["admitted"])
         self.reject(worker(), "lane cap", ledger(3))

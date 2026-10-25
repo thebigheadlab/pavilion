@@ -81,6 +81,10 @@ def check_model(policy, request, reasons, warnings):
             warnings.append("model is untested")
 
 
+def nonempty_str(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
 def check_effort(policy, request, reasons):
     rules = policy["effort"]
     coordinator = request.get("kind", "worker") == "coordinator"
@@ -91,7 +95,7 @@ def check_effort(policy, request, reasons):
         if effort != rules["coordinator"]:
             reasons.append("coordinator effort must be low")
     elif rules["levels"].index(effort) > rules["levels"].index(rules["worker_default"]):
-        missing = [f for f in rules["raised_requires"] if not request.get(f)]
+        missing = [f for f in rules["raised_requires"] if not nonempty_str(request.get(f))]
         if missing:
             reasons.append("raised effort needs " + ", ".join(missing))
 
@@ -118,7 +122,11 @@ def check_review(request, reasons):
             reasons.append("reviewer uses the model of the author")
     sha = opt_dict(request.get("evidence"), "evidence").get("candidate_sha", "")
     head = request.get("head_sha", "")
-    if not SHA.fullmatch(str(sha)) or not SHA.fullmatch(str(head)):
+    for value, name in ((sha, "candidate_sha"), (head, "head_sha")):
+        if not isinstance(value, str):
+            raise InputError(name + " must be a string")
+    sha, head = sha.strip(), head.strip()
+    if not SHA.fullmatch(sha) or not SHA.fullmatch(head):
         reasons.append("evidence and head need a 40-hex commit SHA")
     elif sha != head:
         reasons.append("evidence is stale: SHA differs from head")
@@ -139,6 +147,12 @@ def admit(request, ledger, policy=None):
         raise InputError("request must be an object")
     if not isinstance(ledger, list) or not all(isinstance(a, dict) for a in ledger):
         raise InputError("ledger must be a list of objects")
+    for entry in ledger:
+        for field in ("agent_id", "lane"):
+            if not nonempty_str(entry.get(field)):
+                raise InputError("ledger entry needs a non-empty string " + field)
+        if "state" in entry and not nonempty_str(entry["state"]):
+            raise InputError("ledger state must be a non-empty string")
     reasons, warnings = [], []
     check_identity(request, reasons)
     if reasons:
