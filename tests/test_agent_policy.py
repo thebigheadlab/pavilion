@@ -84,9 +84,68 @@ class AdmitTests(unittest.TestCase):
         self.assertTrue(policy.admit(full, [])["admitted"])
 
     def test_coordinator_effort_is_low(self):
-        self.reject({"kind": "coordinator", "agent_id": "actor-009", "effort": "medium", "lane": "lane-001"}, "must be low")
-        ok = policy.admit({"kind": "coordinator", "agent_id": "actor-009", "effort": "low", "lane": "lane-001"}, [])
-        self.assertTrue(ok["admitted"])
+        self.reject(worker(kind="coordinator", effort="medium"), "must be low")
+        self.assertTrue(policy.admit(worker(kind="coordinator", effort="low", purpose="implement", provider="claude", model="claude-sonnet-5-5"), [])["admitted"])
+
+    def test_coordinator_passes_model_checks(self):
+        low = {"kind": "coordinator", "effort": "low"}
+        self.reject(worker(**low, provider="cursor", model="auto", purpose="review"), "allowlist")
+        self.reject(worker(**low, provider="claude", model="claude-sonnet-5-5", purpose="review"), "purpose is not in the role")
+
+    def test_coordinator_reviewer_needs_review_checks(self):
+        low = {"kind": "coordinator", "effort": "low"}
+        self.reject(review(**low, head_sha=SHA_B), "stale")
+        self.reject(review(**low, author={"agent_id": "actor-002", "model": "x"}), "reviewer is the author")
+        self.reject(review(**low, author={"agent_id": "actor-001", "model": "gpt-6.1-sol"}), "model of the author")
+        self.assertTrue(policy.admit(review(**low), [])["admitted"])
+
+    def test_ids_are_normalized(self):
+        self.reject(review(author={"agent_id": "actor-001", "model": " GPT-6.1-SOL "}), "model of the author")
+        self.reject(review(author={"agent_id": " ACTOR-002 ", "model": "x"}), "reviewer is the author")
+        self.assertTrue(policy.admit(worker(provider=" Codex ", model=" GPT-6.1-Sol "), [])["admitted"])
+        self.reject(worker(provider="cursor", model=" AUTO ", purpose="code"), "allowlist")
+        self.assertTrue(policy.admit(worker(provider="CURSOR", model=" Grok-4.7 ", purpose="code"), [])["admitted"])
+
+    def test_missing_agent_id_or_lane(self):
+        for field in ("agent_id", "lane"):
+            for value in (None, "", "  "):
+                request = worker()
+                request[field] = value
+                self.reject(request, field)
+            request = worker()
+            del request[field]
+            self.reject(request, field)
+            self.reject(worker(**{field: 7}), field)
+
+    def test_codex_cloud_needs_real_offline_flag(self):
+        for value in (None, "false", 0, "", [], "no"):
+            self.reject(worker(route="codex-cloud", t3code_online=value), "T3Code offline")
+        self.assertTrue(policy.admit(worker(route="codex-cloud", t3code_online=False), [])["admitted"])
+
+    def test_optional_approved_must_be_true(self):
+        for value in ("false", "true", 1, "yes", None):
+            self.reject(worker(provider="codex", model="gpt-6-astra", purpose="unresolved_question", optional_approved=value), "optional_approved")
+
+    def test_missing_worker_effort_is_medium(self):
+        request = worker()
+        del request["effort"]
+        self.assertTrue(policy.admit(request, [])["admitted"])
+
+    def test_low_worker_effort_needs_no_evidence(self):
+        self.assertTrue(policy.admit(worker(effort="low"), [])["admitted"])
+        self.reject(worker(effort="xhigh"), "raised effort needs")
+
+    def test_bad_shapes_raise_input_error(self):
+        bad = [
+            ([], []), ("x", []), (worker(), {}), (worker(), "x"), (worker(), [1]),
+            (worker(provider=3), []), (worker(model=["a"]), []),
+            (worker(provider="cursor", model="grok-4.7", purpose="code", capabilities="git"), []),
+            (review(author="x"), []), (review(author=[]), []), (review(evidence="x"), []),
+            (review(author={"agent_id": 1, "model": "m"}), []),
+        ]
+        for request, active in bad:
+            with self.assertRaises(policy.InputError, msg=(request, active)):
+                policy.admit(request, active)
 
     def test_lane_cap(self):
         self.assertTrue(policy.admit(worker(), ledger(2))["admitted"])
@@ -135,6 +194,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(0, self.run_cli(worker(), []))
         self.assertEqual(1, self.run_cli(worker(effort="max"), []))
         self.assertEqual(2, policy.main(["missing-request.json", "missing-ledger.json"]))
+        self.assertEqual(2, self.run_cli([worker()], []))
+        self.assertEqual(2, self.run_cli(worker(), {"a": 1}))
+        self.assertEqual(2, self.run_cli(review(evidence="x"), []))
 
 
 if __name__ == "__main__":
