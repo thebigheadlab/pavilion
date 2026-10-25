@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "path": "AGENTS.md",
+    "rule": "operational-marker",
+    "line_sha256": "2c358f6c309b192297c6ba5beb37b8940fa2993a4fd1eb1daa757a31c2000d23",
+    "reason": "Product feature name in the repository requirements; reviewed as public.",
+    "expires": "2027-01-22"
+  },
+  {
+    "path": "docs/glossary.md",
+    "rule": "operational-marker",
+    "line_sha256": "198020a5414656e944eb4506a63829b71adff0327b4fd5ebf1e47dd2d5405060",
+    "reason": "Glossary term for a planned product feature; reviewed as public.",
+    "expires": "2027-01-22"
+  },
+  {
+    "path": "scripts/publication_guard.py",
+    "rule": "operational-marker",
+    "line_sha256": "161bb990a32c6b79e42bc9a80e68ba933df8d304dfece77e8e660f92e57541b4",
+    "reason": "Detection pattern for private message and planning links; reviewed as public.",
+    "expires": "2027-01-22"
+  },
+  {
+    "path": "tests/test_publication_guard.py",
+    "rule": "operational-marker",
+    "line_sha256": "859d5783e324f17067687abeee1fd3b6a8b210bf21e5607b589e2cccbd5de0a3",
+    "reason": "Sentinel URL that tests the private link detection rule; reviewed as public.",
+    "expires": "2027-01-22"
+  }
+]
