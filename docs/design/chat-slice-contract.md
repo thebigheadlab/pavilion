@@ -122,7 +122,7 @@ Restored authentication state is also old. These steps do not preserve later sig
 ## Proposal for independent restore state
 
 This proposal is inactive. No flag or startup path implements it.
-Add an optional path for the same durable high-water file outside the directory that backup tools replace.
+Add an optional path for the same durable high-water file outside the directory that backup tools replace. Its durability depends on storage honoring fsync.
 Keep that file at mode 0600 and retain it during restores.
 The existing startup comparison could then detect a lower-sequence whole-directory rollback before new writes hide it.
 Normal restarts would keep their history ID and would not force a full client resync.
