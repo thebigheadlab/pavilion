@@ -67,7 +67,7 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 | --- | --- |
 | Agent workflow | The set of upstream agent skills and playbooks that Pavilion uses at the pin. See [Agent workflow](agent-workflow.md). |
 | Author and reviewer separation | The rule that a reviewer is a different agent than the author and runs a different model. |
-| Bootstrap file | A private file outside the repository that names the agent workflow source. The `PAVILION_WORKFLOW_SOURCE` environment variable gives its path. |
+| Bootstrap file | A private file outside the repository that names the agent workflow source. The Coordinator gives its path as the `PAVILION_WORKFLOW_SOURCE` value in each task. |
 | Child | An agent that another agent starts and gives work to. |
 | Coordinator | An agent that assigns work and does not do the work. A Coordinator always uses low effort. |
 | Entry file | The first agent workflow file that an agent reads at session start. The [Pin](agent-workflow.md#pin) table names it. |

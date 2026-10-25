@@ -11,7 +11,8 @@ Those rules take priority over this section.
 Use the agent workflow for nontrivial engineering work.
 Pin: commit `<40-hex SHA>`, version `<version>`.
 Source: `<repository and package path>`. In a public project with a private upstream, write instead:
-`<PROJECT>_WORKFLOW_SOURCE` gives the path of a private file outside the repository.
+The Coordinator supplies `<PROJECT>_WORKFLOW_SOURCE` in each task launch or prompt.
+Its value is the path of a private file outside the repository. Never publish the value.
 The file holds the repository URL and the package path.
 If the source is missing or the commit or version does not match, stop and report `missing source`.
 Read the upstream files at that commit. Do not copy them into this repository.
@@ -24,8 +25,8 @@ At session start:
 4. Read each principle or skill file before you apply it.
 5. Copy the playbook steps verbatim into the todo list.
 
-Give each child the commit, the source variable name, the playbook path, the steps it owns, and these rules.
-Do not put local absolute paths in a child prompt.
+Give each child the commit, the source variable value, the playbook path, the steps it owns, and these rules.
+Do not put other local absolute paths in a child prompt.
 
 Record one result for each playbook step: `done` with evidence,
 `skip: <reason>`, or `n/a: <reason>`.

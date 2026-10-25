@@ -17,26 +17,30 @@ Read the upstream files at the pin.
 
 Paths are relative to the workflow package.
 
+To change the pin, open a PR that updates this table.
+Read the changed upstream files at the new commit before you update the table.
+
 ## Locate the source
 
 The public files do not name the upstream repository.
 A private bootstrap file names it. This file is a prerequisite.
+The Coordinator injects its path into each task. The owner does not need to set a shell variable.
+The path is private task input. Never write it in a tracked file, an issue, a PR, or a commit.
 
-1. Read the `PAVILION_WORKFLOW_SOURCE` environment variable.
-   It holds the path of the private bootstrap file.
+1. Get the `PAVILION_WORKFLOW_SOURCE` value from the task input.
+   The Coordinator supplies it in each task launch or task prompt.
+   If the task input does not give it, read the environment variable with the same name.
+   The value is the path of the private bootstrap file.
    The file must be outside the repository.
 2. Read the file. It holds one repository URL and one package path.
 3. Read the entry file from that repository at the pinned commit.
 4. Confirm that the package version at that commit is the pinned version.
 
-If the variable is not set, the file is missing, or the commit or version does not match, stop.
+If no value is given, the file is missing, or the commit or version does not match, stop.
 Report `missing source` and the step that failed.
 Do not use a different copy, version, or memory of the workflow.
 Do not claim that you followed the pinned files.
 No tool enforces this rule. Each agent must follow it.
-
-To change the pin, open a PR that updates this table.
-Read the changed upstream files at the new commit before you update the table.
 
 ## Start a session
 
@@ -53,14 +57,14 @@ Do not name a playbook, principle, or skill that you did not read in this sessio
 
 Each child prompt must contain these items:
 
-- The pin, the name `PAVILION_WORKFLOW_SOURCE`, and the package paths of the entry file and the matched playbook.
+- The pin, the `PAVILION_WORKFLOW_SOURCE` value, and the package paths of the entry file and the matched playbook.
 - The playbook steps that the child owns.
 - A link to [AGENTS.md](../AGENTS.md) and to this file.
 - The scope, the acceptance criteria, and the stop condition.
 - An instruction to return evidence for each owned step.
 
 Use package paths at the pin.
-Do not put local absolute paths in a child prompt.
+Do not put other local absolute paths in a child prompt.
 A child that cannot locate the source must report `missing source` and stop.
 
 ## Collect stage evidence
