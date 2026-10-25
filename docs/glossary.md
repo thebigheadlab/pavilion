@@ -53,6 +53,8 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 | Composable app | A product extension that can use GitHub, a custom MCP service, or a chain of actions. |
 | MCP | Model Context Protocol. A protocol for tool and context connections. |
 | Native Android parity | The Android app supports the same product functions as the other supported clients. |
+| History ID | A random identifier for the current sync history. Clients use it with a cursor to detect a change of history. |
+| High-water mark | The greatest event sequence reserved in a sidecar before the server commits or acknowledges the event. Its durability depends on storage honoring fsync. |
 | Offline sync | The process that stores local changes without a connection and resolves them after reconnection. |
 | Personal-first | The initial product serves one owner's workspace. Multiuser support comes later. |
 | Spike | A bounded investigation that supplies evidence for an engineering decision. |
