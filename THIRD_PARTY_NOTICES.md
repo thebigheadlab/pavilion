@@ -2,12 +2,14 @@
 
 ## cursor/plugins (pstack)
 
-This repository records the upstream project `cursor/plugins`, commit `9580c23696ac8d7abed0c166f2f9918800afb819` (v0.15.32).
+This repository records the upstream project `cursor/plugins`, path `pstack/`, commit `9580c23696ac8d7abed0c166f2f9918800afb819` (v0.15.32).
 The policy in `docs/agent-policy.md` maps pstack duties to local rules.
-The upstream license is MIT.
-This notice has no upstream copyright line. We did not verify the exact line.
+The text below is the exact upstream `pstack/LICENSE` file at that commit.
 
-The standard MIT license text follows.
+```text
+MIT License
+
+Copyright (c) 2026 Lauren Tan
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,3 +28,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
