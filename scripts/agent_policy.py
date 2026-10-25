@@ -95,7 +95,8 @@ def check_effort(policy, request, reasons):
         if effort != rules["coordinator"]:
             reasons.append("coordinator effort must be low")
     elif rules["levels"].index(effort) > rules["levels"].index(rules["worker_default"]):
-        missing = [f for f in rules["raised_requires"] if not nonempty_str(request.get(f))]
+        escalation = opt_dict(request.get("escalation"), "escalation")
+        missing = [f for f in rules["raised_requires"] if not nonempty_str(escalation.get(f))]
         if missing:
             reasons.append("raised effort needs " + ", ".join(missing))
 
@@ -125,7 +126,6 @@ def check_review(request, reasons):
     for value, name in ((sha, "candidate_sha"), (head, "head_sha")):
         if not isinstance(value, str):
             raise InputError(name + " must be a string")
-    sha, head = sha.strip(), head.strip()
     if not SHA.fullmatch(sha) or not SHA.fullmatch(head):
         reasons.append("evidence and head need a 40-hex commit SHA")
     elif sha != head:

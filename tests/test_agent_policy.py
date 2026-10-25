@@ -13,6 +13,7 @@ policy = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(policy)
 SHA_A = "a" * 40
 SHA_B = "b" * 40
+ESC = {"evidence": "e-001", "scope": "s-001", "stop_condition": "c-001"}
 
 
 def worker(**changes):
@@ -78,9 +79,9 @@ class AdmitTests(unittest.TestCase):
 
     def test_effort_rules(self):
         self.reject(worker(effort="high"), "raised effort needs evidence, scope, stop_condition")
-        self.reject(worker(effort="high", evidence="e-001", scope="s-001"), "stop_condition")
+        self.reject(worker(effort="high", escalation={"evidence": "e-001", "scope": "s-001"}), "stop_condition")
         self.reject(worker(effort="turbo"), "effort is not valid")
-        full = worker(effort="high", evidence="e-001", scope="s-001", stop_condition="c-001")
+        full = worker(effort="high", escalation=ESC)
         self.assertTrue(policy.admit(full, [])["admitted"])
 
     def test_coordinator_effort_is_low(self):
@@ -158,9 +159,19 @@ class AdmitTests(unittest.TestCase):
 
     def test_escalation_fields_must_be_strings(self):
         for bad in (True, 1, ["x"], {"a": 1}, "  "):
-            self.reject(worker(effort="high", evidence=bad, scope="s-001", stop_condition="c-001"), "raised effort needs evidence")
-            self.reject(worker(effort="high", evidence="e-001", scope=bad, stop_condition="c-001"), "raised effort needs scope")
-            self.reject(worker(effort="high", evidence="e-001", scope="s-001", stop_condition=bad), "raised effort needs stop_condition")
+            for field in ESC:
+                self.reject(worker(effort="high", escalation=dict(ESC, **{field: bad})), "raised effort needs " + field)
+
+    def test_escalation_must_be_object(self):
+        for bad in ("x", ["x"], 1, True):
+            with self.assertRaises(policy.InputError, msg=bad):
+                policy.admit(worker(effort="high", escalation=bad), [])
+
+    def test_high_effort_review_is_admitted(self):
+        for effort in ("high", "xhigh", "max"):
+            decision = policy.admit(review(effort=effort, escalation=ESC), [])
+            self.assertTrue(decision["admitted"], decision["reasons"])
+        self.reject(review(effort="high"), "raised effort needs")
 
     def test_sha_must_be_string(self):
         for bad in (12345, True, ["a"]):
@@ -168,8 +179,8 @@ class AdmitTests(unittest.TestCase):
                 policy.admit(review(head_sha=bad), [])
             with self.assertRaises(policy.InputError, msg=bad):
                 policy.admit(review(evidence={"candidate_sha": bad}), [])
-        padded = review(head_sha=" " + SHA_A + " ")
-        self.assertTrue(policy.admit(padded, [])["admitted"])
+        self.reject(review(head_sha=" " + SHA_A + " "), "40-hex")
+        self.reject(review(evidence={"candidate_sha": SHA_A + "\n"}), "40-hex")
 
     def test_lane_cap(self):
         self.assertTrue(policy.admit(worker(), ledger(2))["admitted"])

@@ -29,7 +29,7 @@ The policy denies the Cursor models composer, claude, gemini, and auto.
 
 - A Worker uses medium effort by default. Low Worker effort needs no evidence.
 - A Coordinator always uses low effort.
-- Worker effort above medium needs the fields `evidence`, `scope`, and `stop_condition`.
+- Worker effort above medium needs an `escalation` object with the fields `evidence`, `scope`, and `stop_condition`.
 - Use T3Code first. Use Codex Cloud only when the request sets `t3code_online` to `false`. A missing value means T3Code is online.
 - Do not use paid upgrades.
 - A Lane holds at most 3 agents.
@@ -39,8 +39,8 @@ The policy denies the Cursor models composer, claude, gemini, and auto.
 - A Coordinator request passes the same provider, model, and purpose checks as a Worker request.
 - Author and reviewer must be different. They need different agent IDs and different models.
 - A reviewer role must include review. Sonnet fails this check by default.
-- Review evidence must name an Exact candidate. The checker rejects a stale SHA. The candidate SHA and the head SHA must be strings of 40 lowercase hex characters.
-- A raised effort needs `evidence`, `scope`, and `stop_condition`. Each must be a non-empty string.
+- Review evidence must name an Exact candidate. The checker rejects a stale SHA. The candidate SHA and the head SHA must be strings of 40 lowercase hex characters. The checker does not trim whitespace.
+- A raised effort needs an `escalation` object. Its fields `evidence`, `scope`, and `stop_condition` must be non-empty strings. The `escalation` field is separate from the review `evidence` object. A value that is not an object is an input error.
 
 ## Run the check
 
