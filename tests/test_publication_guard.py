@@ -444,6 +444,16 @@ class GitTests(unittest.TestCase):
         body = self.commit("Co-author " + noreply, base)
         self.run_guard("--commit-messages", base + ".." + body, code=1)
 
+    def test_noreply_exemption_covers_email_rule_only(self):
+        markers = self.marker_file()
+        base = self.commit("Synthetic base")
+        hidden = "1234+" + MARKER + "@" + "users.noreply.github.com"
+        bad = self.commit("Synthetic change", base, email=hidden)
+        result = self.run_guard("--commit-messages", base + ".." + bad, code=1, markers=markers)
+        self.assertIn('"operational-marker"', result.stdout)
+        self.assertNotIn('"email"', result.stdout)
+        self.run_guard("--commit-messages", base + ".." + bad)
+
     def test_commit_messages_reject_bad_ranges(self):
         self.commit("Synthetic base")
         self.run_guard("--commit-messages", "--all", code=2)

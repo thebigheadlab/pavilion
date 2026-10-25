@@ -6,12 +6,14 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 
 
 POLICY = Path(__file__).resolve().parents[1] / "policy" / "agent-policy.json"
 EXAMPLE_ROUTING = Path(__file__).resolve().parents[1] / "policy" / "routing.example.json"
 ROUTING_ENV = "PAVILION_ROUTING_FILE"
+MAX_ROUTING_BYTES = 64 * 1024
 SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -43,7 +45,7 @@ def load_policy(path=POLICY):
 
 def validate_routing(routing, policy):
     # Errors never include file content.
-    if not isinstance(routing, dict) or set(routing) != {"version", "executors"} or routing["version"] != 1:
+    if not isinstance(routing, dict) or set(routing) != {"version", "executors"} or type(routing["version"]) is not int or routing["version"] != 1:
         raise InputError("routing file has the wrong shape")
     executors = routing["executors"]
     names = set(policy["executors"].values())
@@ -58,10 +60,35 @@ def validate_routing(routing, policy):
     return {name: {norm(m, "routing") for m in entry["models"]} for name, entry in executors.items()}
 
 
+def read_routing(path):
+    # Reject links, special files, and large files before the read. Errors omit the path.
+    try:
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_ROUTING_BYTES:
+            raise InputError("routing file is not accepted")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        fd = os.open(path, flags)
+    except OSError:
+        raise InputError("routing file is not readable") from None
+    with os.fdopen(fd, "rb") as handle:
+        after = os.fstat(handle.fileno())
+        if not stat.S_ISREG(after.st_mode) or after.st_size > MAX_ROUTING_BYTES:
+            raise InputError("routing file is not accepted")
+        data = handle.read(MAX_ROUTING_BYTES + 1)
+    if len(data) > MAX_ROUTING_BYTES:
+        raise InputError("routing file is not accepted")
+    try:
+        return json.loads(data.decode("utf-8"))
+    except ValueError:
+        raise InputError("routing file is not valid") from None
+
+
 def load_routing(policy, path=None):
     # Order: explicit path, then the environment variable, then the public example.
     path = path or os.environ.get(ROUTING_ENV) or EXAMPLE_ROUTING
-    return validate_routing(json.loads(Path(path).read_text(encoding="utf-8")), policy)
+    routing = read_routing(path)
+    validate_routing(routing, policy)
+    return routing
 
 
 def find_role(policy, model):
@@ -169,7 +196,8 @@ def check_identity(request, reasons):
 
 def admit(request, ledger, policy=None, routing=None):
     policy = policy or load_policy()
-    routing = routing if routing is not None else load_routing(policy)
+    # Supplied routing gets the same schema check as a routing file.
+    routing = validate_routing(load_routing(policy) if routing is None else routing, policy)
     if not isinstance(request, dict):
         raise InputError("request must be an object")
     if not isinstance(ledger, list) or not all(isinstance(a, dict) for a in ledger):

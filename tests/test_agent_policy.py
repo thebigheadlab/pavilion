@@ -25,11 +25,10 @@ ROUTING_DATA = {
         FALLBACK: {"models": ["grok-4.7", "Grok-4.6 "]},
     },
 }
-ROUTING = policy.validate_routing(ROUTING_DATA, policy.load_policy())
 
 
 def admit(request, active=None):
-    return policy.admit(request, [] if active is None else active, routing=ROUTING)
+    return policy.admit(request, [] if active is None else active, routing=ROUTING_DATA)
 
 
 def executor_for(model):
@@ -248,6 +247,22 @@ class AdmitTests(unittest.TestCase):
         self.reject(review(head_sha=SHA_A.upper()), "40-hex")
 
 
+class RoutingValidationTests(unittest.TestCase):
+    def test_supplied_routing_is_validated(self):
+        for bad in ({}, {"version": 1, "executors": {}}, {"version": True, "executors": ROUTING_DATA["executors"]},
+                    {"version": 1, "executors": {PRIMARY: {"models": ["x"]}}},
+                    {"version": 1, "executors": {PRIMARY: {"models": []}, FALLBACK: {"models": ["x"]}}},
+                    [], "x"):
+            with self.assertRaises(policy.InputError, msg=bad):
+                policy.admit(worker(), [], routing=bad)
+
+    def test_version_must_be_int(self):
+        for bad in (True, 1.0, "1"):
+            data = dict(ROUTING_DATA, version=bad)
+            with self.assertRaises(policy.InputError, msg=bad):
+                policy.validate_routing(data, policy.load_policy())
+
+
 class CliTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -290,12 +305,26 @@ class CliTests(unittest.TestCase):
 
     def test_example_routing_is_the_default(self):
         example = policy.load_routing(policy.load_policy())
-        self.assertEqual({PRIMARY, FALLBACK}, set(example))
+        self.assertEqual({PRIMARY, FALLBACK}, set(example["executors"]))
         # The example holds placeholders only, so real models fail closed.
         self.assertEqual(1, self.run_cli(worker(), []))
         decision = policy.admit(worker(), [])
         self.assertTrue(any("allowlist" in r for r in decision["reasons"]))
         self.assertEqual(1, self.run_cli(worker(model="model-placeholder-a"), []))
+
+    def test_routing_file_must_be_small_regular_and_not_a_link(self):
+        real = self.write("real.json", ROUTING_DATA)
+        link = self.dir / "link.json"
+        link.symlink_to(real)
+        fifo = self.dir / "fifo.json"
+        os.mkfifo(fifo)
+        big = self.write("big.json", json.dumps(ROUTING_DATA) + " " * policy.MAX_ROUTING_BYTES, raw=True)
+        for bad in (link, fifo, Path(big)):
+            with self.assertRaises(policy.InputError) as ctx:
+                policy.load_routing(policy.load_policy(), str(bad))
+            self.assertNotIn(str(self.dir), str(ctx.exception))
+            self.assertEqual(2, self.run_cli(worker(), [], "--routing", str(bad)))
+        self.assertEqual(0, self.run_cli(worker(), [], "--routing", real))
 
     def test_missing_routing_file_is_an_input_error(self):
         self.assertEqual(2, self.run_cli(worker(), [], "--routing", str(self.dir / "absent.json")))

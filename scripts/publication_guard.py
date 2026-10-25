@@ -264,6 +264,11 @@ def commit_scan(root, rev_range, markers=()):
         # Bot metadata uses the public no-reply address form. Exempt only that form.
         lines = [NOREPLY.sub(b"<>", l) if l.startswith((b"author ", b"committer ")) else l for l in head.split(b"\n")]
         scanner.scan("commit-metadata", b"\n".join(lines) + sep + body, allow=False)
+        # The exemption covers the email rule only. Scan the original metadata for the rest.
+        for line in head.decode("utf-8", "replace").split("\n"):
+            for rule in line_rules(line, markers):
+                if rule != "email" and not any(f["item"] == scanner.count and f["rule"] == rule for f in scanner.findings):
+                    scanner.add(scanner.count, rule)
     return scanner
 
 
