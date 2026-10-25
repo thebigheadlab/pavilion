@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "routes": {"order": ["t3code", "codex-cloud"], "codex-cloud-requires": "t3code-offline"},
+  "executors": {"primary": "executor-primary", "fallback": "executor-fallback"},
   "paid_upgrades": false,
   "caps": {"lane": 3, "global": 10},
   "effort": {
@@ -9,22 +9,18 @@
     "coordinator": "low",
     "raised_requires": ["evidence", "scope", "stop_condition"]
   },
-  "cursor": {
-    "allow": ["grok-4.7", "grok-4.6"],
-    "deny": ["composer", "claude", "gemini", "auto"]
-  },
   "roles": [
-    {"provider": "claude", "model": "claude-sonnet-5-5", "purposes": ["break_down", "implement"], "optional": false},
-    {"provider": "codex", "model": "gpt-6.1-sol", "purposes": ["build", "debug", "test", "review"], "optional": false},
-    {"provider": "codex", "model": "gpt-6-luna", "purposes": ["small_check", "extraction", "docs"], "optional": false},
-    {"provider": "claude", "model": "claude-opus-5-5", "purposes": ["design", "security_challenge", "review", "ui_ux"], "optional": false},
+    {"model": "claude-sonnet-5-5", "purposes": ["break_down", "implement"], "optional": false},
+    {"model": "gpt-6.1-sol", "purposes": ["build", "debug", "test", "review"], "optional": false},
+    {"model": "gpt-6-luna", "purposes": ["small_check", "extraction", "docs"], "optional": false},
+    {"model": "claude-opus-5-5", "purposes": ["design", "security_challenge", "review", "ui_ux"], "optional": false},
     {
-      "provider": "cursor", "model": "grok-4.7", "purposes": ["file", "code", "test", "review"], "optional": false,
+      "model": "grok-4.7", "purposes": ["file", "code", "test", "review"], "optional": false,
       "validated": ["text", "file", "read", "write", "test", "failure", "repair", "review", "handoff", "cancel"],
-      "untested": ["git", "worktree_isolation", "large_task", "network", "mcp", "provider_error"]
+      "untested": ["git", "worktree_isolation", "large_task", "network", "mcp", "executor_error"]
     },
-    {"provider": "cursor", "model": "grok-4.6", "purposes": ["file", "code", "test", "review"], "optional": false, "validated": [], "status": "untested"},
-    {"provider": "codex", "model": "gpt-6-astra", "purposes": ["unresolved_question"], "optional": true},
-    {"provider": "claude", "model": "claude-fable-5-1", "purposes": ["ui_ux", "alternative_analysis"], "optional": true}
+    {"model": "grok-4.6", "purposes": ["file", "code", "test", "review"], "optional": false, "validated": [], "status": "untested"},
+    {"model": "gpt-6-astra", "purposes": ["unresolved_question"], "optional": true},
+    {"model": "claude-fable-5-1", "purposes": ["ui_ux", "alternative_analysis"], "optional": true}
   ]
 }
