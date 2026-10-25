@@ -17,6 +17,10 @@ import sys
 
 MAX_BYTES = 2 * 1024 * 1024
 POLICY = "scripts/privacy-allowlist.json"
+MARKERS_ENV = "PAVILION_PRIVATE_MARKERS"
+MARKER_RULE = "operational-marker"
+EXCEPTION_RULES = {"high-entropy", MARKER_RULE}
+NOREPLY = re.compile(rb"<(?:\d+\+[\w-]+@users\.noreply\.github\.com|noreply@github\.com)>")
 RULES = {
     "email": re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"),
     "private-path": re.compile(r"(?:/(?:home|Users|root)/[^\s\"'<>]+|[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/][^\s\"'<>]+)"),
@@ -59,8 +63,42 @@ def entropy(value):
     return -sum((n / len(value)) * math.log2(n / len(value)) for n in counts.values())
 
 
-def line_rules(line):
+def load_markers_from(lines):
+    markers = []
+    for line in lines:
+        marker = line.strip().lower()
+        if marker and marker not in markers:
+            if len(marker) < 3:
+                raise GuardError("private marker too short")
+            markers.append(marker)
+    if not markers:
+        raise GuardError("private marker file has no markers")
+    return tuple(markers)
+
+
+def load_markers(required, forbidden_roots=()):
+    # The marker file is private. Report no value, path, or content.
+    value = os.environ.get(MARKERS_ENV)
+    if not value:
+        if required:
+            raise GuardError("private marker file required")
+        return ()
+    path = Path(value)
+    if not path.is_file():
+        raise GuardError("private marker file unreadable")
+    resolved = path.resolve()
+    if any(resolved.is_relative_to(root) for root in forbidden_roots):
+        raise GuardError("private marker file must be outside the repository")
+    if resolved.stat().st_size > MAX_BYTES:
+        raise GuardError("private marker file too large")
+    return load_markers_from(resolved.read_text(encoding="utf-8").splitlines())
+
+
+def line_rules(line, markers=()):
     found = [name for name, pattern in RULES.items() if pattern.search(line)]
+    lowered = line.lower()
+    if any(marker in lowered for marker in markers):
+        found.append(MARKER_RULE)
     for token in re.findall(r"[A-Za-z0-9_+/=-]{32,}", line):
         if not re.fullmatch(r"[0-9a-fA-F]+", token) and entropy(token) >= 4.5:
             found.append("high-entropy")
@@ -77,7 +115,7 @@ def path_rules(name):
     return []
 
 
-def load_policy(data):
+def load_policy(data, markers=()):
     try:
         entries = json.loads(data)
         if not isinstance(entries, list):
@@ -88,23 +126,24 @@ def load_policy(data):
             p = PurePosixPath(entry["path"])
             if p.is_absolute() or ".." in p.parts or any(c in entry["path"] for c in "*?[]\\\n\r"):
                 raise ValueError()
-            if entry["rule"] != "high-entropy" or not re.fullmatch(r"[a-f0-9]{64}", entry["line_sha256"]):
+            if entry["rule"] not in EXCEPTION_RULES or not re.fullmatch(r"[a-f0-9]{64}", entry["line_sha256"]):
                 raise ValueError()
             days = (date.fromisoformat(entry["expires"]) - date.today()).days
             if not 0 <= days <= 90 or not isinstance(entry["reason"], str) or len(entry["reason"].strip()) < 20:
                 raise ValueError()
-            if line_rules(entry["reason"]):
+            if line_rules(entry["reason"], markers):
                 raise ValueError()
         if len({(e["path"], e["rule"], e["line_sha256"]) for e in entries}) != len(entries):
             raise ValueError()
         return entries
     except (ValueError, TypeError, KeyError):
-        raise GuardError("invalid allowlist; exact entropy-only entries with reason and expiry required") from None
+        raise GuardError("invalid allowlist; exact line entries with reason and expiry required") from None
 
 
 class Scanner:
-    def __init__(self, entries=()):
+    def __init__(self, entries=(), markers=()):
         self.entries = entries
+        self.markers = markers
         self.used = set()
         self.findings = []
         self.count = 0
@@ -116,7 +155,7 @@ class Scanner:
     def scan(self, name, data, mode="100644", allow=True):
         self.count += 1
         item = self.count
-        for rule in path_rules(name) + line_rules(name):
+        for rule in path_rules(name) + line_rules(name, self.markers):
             self.add(item, rule)
         if mode not in ("100644", "100755"):
             self.add(item, "symlink-or-submodule")
@@ -135,7 +174,7 @@ class Scanner:
             self.add(item, "opaque-or-log-file")
             return
         for number, line in enumerate(content.splitlines(), 1):
-            for rule in line_rules(line):
+            for rule in line_rules(line, self.markers):
                 digest = hashlib.sha256(line.encode()).hexdigest()
                 matches = [i for i, e in enumerate(self.entries) if allow and e["path"] == name and e["rule"] == rule and e["line_sha256"] == digest]
                 if matches:
@@ -144,7 +183,9 @@ class Scanner:
                     self.add(item, rule, number)
 
     def finish(self, require_used=False):
-        if require_used and len(self.used) != len(self.entries):
+        # Marker entries cannot match while the marker file is absent.
+        needed = {i for i, e in enumerate(self.entries) if e["rule"] != MARKER_RULE or self.markers}
+        if require_used and not needed <= self.used:
             self.add(0, "stale-allowlist")
         print(json.dumps({"result": "FAIL" if self.findings else "PASS", "items": self.count, "finding_count": len(self.findings), "findings": self.findings[:100]}, sort_keys=True))
         return 1 if self.findings else 0
@@ -186,10 +227,10 @@ def regular_bytes(path):
     return data
 
 
-def staged_policy(root, entries):
+def staged_policy(root, entries, markers=()):
     for name, mode, oid in entries:
         if name == POLICY and mode == "100644":
-            return load_policy(git(root, "cat-file", "blob", oid))
+            return load_policy(git(root, "cat-file", "blob", oid), markers)
     raise GuardError("stage the allowlist file before staged checks")
 
 
@@ -197,9 +238,9 @@ def staged_patch(root):
     return git(root, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--binary", "--no-renames", "--src-prefix=a/", "--dst-prefix=b/")
 
 
-def staged_scan(root):
+def staged_scan(root, markers=()):
     entries = index_entries(root)
-    scanner = Scanner(staged_policy(root, entries))
+    scanner = Scanner(staged_policy(root, entries, markers), markers)
     for name, mode, oid in entries:
         scanner.scan(name, git(root, "cat-file", "blob", oid) if mode in ("100644", "100755") else b"", mode)
     # Full index blobs cover added text. Also check the rest of the patch.
@@ -209,6 +250,77 @@ def staged_scan(root):
         scanner.add(0, "binary-diff")
     remainder = b"\n".join(line for line in patch.splitlines() if not (line.startswith(b"+") and not line.startswith(b"+++")))
     scanner.scan("staged-diff", remainder, allow=False)
+    return scanner
+
+
+HEADER_LINE = re.compile(rb"^([a-z][a-z0-9-]*) (.+)$")
+IDENTITY_VALUE = re.compile(rb"^[^<>\n]*\S[^<>\n]* <[^<>\s]+> \d+ [+-]\d{4}$")
+OBJECT_ID = re.compile(rb"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+ENCODING_VALUE = re.compile(rb"^[A-Za-z0-9._:-]{1,40}$")
+ARMOR_LINE = re.compile(rb"^[\x20-\x7e]*$")
+
+
+def commit_identity_and_message(raw):
+    # Parse a commit object. Return the author and committer lines and the message.
+    # Skip tree, parent, signature, encoding, and mergetag content after a plausibility check.
+    head, sep, body = raw.partition(b"\n\n")
+    if not sep:
+        raise GuardError("malformed commit object")
+    if b"\r" in head or b"\0" in head:
+        raise GuardError("malformed commit object")
+    identity, key, counts = [], None, {}
+    for line in head.split(b"\n"):
+        if line.startswith(b" "):
+            if key is None:
+                raise GuardError("malformed commit object")
+            if key in (b"author", b"committer"):
+                identity.append(line)
+            elif key in (b"gpgsig", b"gpgsig-sha256", b"mergetag"):
+                if not ARMOR_LINE.match(line[1:]):
+                    raise GuardError("malformed commit object")
+            else:
+                raise GuardError("malformed commit object")
+            continue
+        match = HEADER_LINE.match(line)
+        if not match:
+            raise GuardError("malformed commit object")
+        key, value = match.groups()
+        counts[key] = counts.get(key, 0) + 1
+        if key in (b"author", b"committer"):
+            if not IDENTITY_VALUE.match(value):
+                raise GuardError("malformed commit object")
+            identity.append(line)
+        elif key in (b"tree", b"parent"):
+            if not OBJECT_ID.match(value):
+                raise GuardError("malformed commit object")
+        elif key == b"encoding":
+            if not ENCODING_VALUE.match(value):
+                raise GuardError("malformed commit object")
+        elif key in (b"gpgsig", b"gpgsig-sha256", b"mergetag"):
+            if not ARMOR_LINE.match(value):
+                raise GuardError("malformed commit object")
+        else:
+            raise GuardError("malformed commit object")
+    if counts.get(b"author") != 1 or counts.get(b"committer") != 1 or counts.get(b"tree") != 1:
+        raise GuardError("malformed commit object")
+    return identity, body
+
+
+def commit_scan(root, rev_range, markers=()):
+    # Scan the author and committer lines plus the message of each raw commit object.
+    if not rev_range or rev_range.startswith("-"):
+        raise GuardError("invalid revision range")
+    scanner = Scanner(markers=markers)
+    for oid in git(root, "rev-list", "--end-of-options", rev_range).split():
+        identity, body = commit_identity_and_message(git(root, "cat-file", "commit", oid.decode()))
+        # Bot metadata uses the public no-reply address form. Exempt only that form.
+        lines = [NOREPLY.sub(b"<>", l) if l.startswith((b"author ", b"committer ")) else l for l in identity]
+        scanner.scan("commit-metadata", b"\n".join(lines) + b"\n\n" + body, allow=False)
+        # The exemption covers the email rule only. Scan the original metadata for the rest.
+        for line in b"\n".join(identity).decode("utf-8", "replace").split("\n"):
+            for rule in line_rules(line, markers):
+                if rule != "email" and not any(f["item"] == scanner.count and f["rule"] == rule for f in scanner.findings):
+                    scanner.add(scanner.count, rule)
     return scanner
 
 
@@ -229,15 +341,17 @@ def main():
     group.add_argument("--tracked", action="store_true")
     group.add_argument("--staged", action="store_true")
     group.add_argument("--candidate", action="append", metavar="FILE")
+    group.add_argument("--commit-messages", metavar="REV_RANGE")
     group.add_argument("--write-review", metavar="FILE")
     group.add_argument("--verify-review", metavar="FILE")
+    parser.add_argument("--require-markers", action="store_true")
     args = parser.parse_args()
     root_input = Path(args.root)
     if has_symlink(root_input):
         raise GuardError("symlink repository root rejected")
     root = root_input.resolve()
     if args.candidate:
-        scanner = Scanner()
+        scanner = Scanner(markers=load_markers(args.require_markers, [root]))
         for value in args.candidate:
             p = Path(value)
             data, mode = working_bytes(p)
@@ -245,8 +359,11 @@ def main():
             scanner.scan(p.name if p.is_absolute() else p.as_posix(), data, mode, allow=False)
         return scanner.finish()
     root = Path(os.fsdecode(git(root, "rev-parse", "--show-toplevel")).strip())
+    markers = load_markers(args.require_markers, [root_input.resolve(), root.resolve()])
+    if args.commit_messages:
+        return commit_scan(root, args.commit_messages, markers).finish()
     if args.tracked:
-        scanner = Scanner(load_policy(regular_bytes(root / POLICY)))
+        scanner = Scanner(load_policy(regular_bytes(root / POLICY), markers), markers)
         for name, mode, oid in index_entries(root):
             scanner.scan(name, git(root, "cat-file", "blob", oid) if mode in ("100644", "100755") else b"", mode)
             p = root / name
@@ -254,7 +371,7 @@ def main():
                 data, working_mode = working_bytes(p)
                 scanner.scan(name, data, working_mode)
         return scanner.finish(require_used=True)
-    scanner = staged_scan(root)
+    scanner = staged_scan(root, markers)
     if scanner.finish(require_used=True):
         return 1
     if args.staged:

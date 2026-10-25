@@ -20,6 +20,8 @@ python3 scripts/publication_guard.py --tracked
 python3 scripts/publication_guard.py --candidate issue-title.txt --candidate issue-body.md
 ```
 
+Also complete the [operational marker checks](#check-operational-markers) before publication.
+
 `--candidate` reads each complete file, including unchanged text.
 Repeat the argument for each file.
 Candidate scans never use the allowlist.
@@ -37,6 +39,52 @@ Ignore rules do not exclude tracked content.
 If you delete a working copy, the guard still checks its index bytes.
 Scan untracked files as candidates before you stage them.
 The checks include the initial license and README without exclusions.
+
+## Check operational markers
+
+The `operational-marker` rule finds text that the owner keeps out of public content.
+The owner keeps the list of markers private and outside the repository.
+Never commit the marker file, quote its values, or put them in a test, issue, or PR.
+
+The marker file holds one literal per line.
+The match ignores case.
+A marker must have at least 3 characters.
+Blank lines are ignored.
+The rule applies to file contents, filenames, candidate files, and commit metadata.
+
+Complete these steps before you publish:
+
+1. Set `PAVILION_PRIVATE_MARKERS` to the marker file.
+   The file must be outside the repository.
+2. Scan code and docs. Add `--require-markers` so that a missing file is an error:
+   `python3 scripts/publication_guard.py --tracked --require-markers`
+   and `python3 scripts/publication_guard.py --staged --require-markers`.
+3. Save the PR title and body in files outside the repository.
+   Scan them as candidate files:
+   `python3 scripts/publication_guard.py --candidate pr-title.txt --candidate pr-body.md --require-markers`.
+4. Scan each outgoing commit message and its author and committer lines:
+   `python3 scripts/publication_guard.py --commit-messages origin/main..HEAD --require-markers`.
+   Use the revision range of the commits that you will publish.
+
+Without `PAVILION_PRIVATE_MARKERS`, the guard skips the rule.
+With `--require-markers`, a missing, unreadable, empty, or in-repository marker file is an error with exit status 2.
+A skipped rule is not a pass.
+The diagnostics show only item numbers, line numbers, and rule IDs.
+
+The commit message scan applies all rules.
+It reads the raw commit object.
+It scans only the author and committer lines and the message.
+It does not scan the tree, parent, signature, or encoding fields.
+A malformed commit object is an error with exit status 2.
+It accepts the public no-reply email form of the bot account in the author and committer lines only.
+It reports any other email address.
+
+A legitimate product reference can need an exception.
+Add an exact `operational-marker` entry to `scripts/privacy-allowlist.json`.
+Review it as carefully as code.
+The `--staged` patch scan applies no exceptions to removed or context lines.
+A change that removes marked text still shows that text in the diff.
+Obtain owner direction before you publish such a change.
 
 ## Understand the rules and results
 
@@ -105,22 +153,22 @@ The record documents review decisions.
 It does not prove that a human read the diff.
 Repeat all checks immediately before publication.
 
-Scan complete commit messages, PR text, issue text, and other candidate artifacts separately.
-Scan complete commit author metadata as a separate candidate artifact.
+Scan complete PR text, issue text, and other candidate artifacts separately.
+Scan commit messages and commit author metadata with `--commit-messages`.
 Obtain human review of those artifacts and commit author metadata.
 Use bot commit metadata for an authorized commit.
 The guard does not commit or publish code.
 
 ## Limit allowlist exceptions
 
-`scripts/privacy-allowlist.json` starts empty.
-Only the `high-entropy` rule permits an exception.
+`scripts/privacy-allowlist.json` holds only reviewed exact-line entries.
+Only the `high-entropy` and `operational-marker` rules permit an exception.
 Each entry must contain exactly these keys:
 
 | Key | Requirement |
 | --- | --- |
 | `path` | Use an exact repository-relative path. Do not use parent traversal or wildcards. |
-| `rule` | Use `high-entropy` only. |
+| `rule` | Use `high-entropy` or `operational-marker`. |
 | `line_sha256` | Use the SHA-256 digest of the exact UTF-8 line without its newline. |
 | `reason` | Use at least 20 characters to explain why the value is demonstrably public and contains no secret. |
 | `expires` | Use an ISO date from today through the next 90 days. |
@@ -128,6 +176,8 @@ Each entry must contain exactly these keys:
 Do not store the matched value in the entry.
 Review an exception as carefully as code.
 Duplicate, expired, malformed, broad, and unused entries fail.
+An `operational-marker` entry counts as unused only when the marker file is set.
+The reason of an entry must not contain a marker.
 A path or line change invalidates the exception.
 All other rules still apply to that line.
 
@@ -170,7 +220,7 @@ A deliberately encoded payload can evade the patterns.
 Review renamed or mislabeled files even when the checks pass.
 Neutral IDs do not make copied user content synthetic.
 
-The scanner does not inspect Git history or commit metadata.
+The scanner inspects Git history only through `--commit-messages`, only for the range that you give, and only for commit messages and metadata, not past file contents.
 It does not inspect ignored or unselected untracked files, remote branches, Git LFS objects, external URLs, dependencies, or GitHub attachments.
 It cannot stop another process from changing the index during publication.
 Stop concurrent writers during review and publication.
