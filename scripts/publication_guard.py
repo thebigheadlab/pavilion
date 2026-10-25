@@ -253,19 +253,41 @@ def staged_scan(root, markers=()):
     return scanner
 
 
+def commit_identity_and_message(raw):
+    # Parse a commit object. Return the author and committer lines and the message.
+    # Skip tree, parent, signature, encoding, and mergetag fields.
+    head, sep, body = raw.partition(b"\n\n")
+    if not sep:
+        raise GuardError("malformed commit object")
+    identity, keep, started = [], False, False
+    for line in head.split(b"\n"):
+        if line.startswith(b" "):
+            if not started:
+                raise GuardError("malformed commit object")
+            if keep:
+                identity.append(line)
+            continue
+        started = True
+        keep = line.startswith((b"author ", b"committer "))
+        if keep:
+            identity.append(line)
+    if not any(l.startswith(b"author ") for l in identity) or not any(l.startswith(b"committer ") for l in identity):
+        raise GuardError("malformed commit object")
+    return identity, body
+
+
 def commit_scan(root, rev_range, markers=()):
-    # Scan the raw commit objects: author and committer lines plus the message.
+    # Scan the author and committer lines plus the message of each raw commit object.
     if not rev_range or rev_range.startswith("-"):
         raise GuardError("invalid revision range")
     scanner = Scanner(markers=markers)
     for oid in git(root, "rev-list", "--end-of-options", rev_range).split():
-        raw = git(root, "cat-file", "commit", oid.decode())
-        head, sep, body = raw.partition(b"\n\n")
+        identity, body = commit_identity_and_message(git(root, "cat-file", "commit", oid.decode()))
         # Bot metadata uses the public no-reply address form. Exempt only that form.
-        lines = [NOREPLY.sub(b"<>", l) if l.startswith((b"author ", b"committer ")) else l for l in head.split(b"\n")]
-        scanner.scan("commit-metadata", b"\n".join(lines) + sep + body, allow=False)
+        lines = [NOREPLY.sub(b"<>", l) if l.startswith((b"author ", b"committer ")) else l for l in identity]
+        scanner.scan("commit-metadata", b"\n".join(lines) + b"\n\n" + body, allow=False)
         # The exemption covers the email rule only. Scan the original metadata for the rest.
-        for line in head.decode("utf-8", "replace").split("\n"):
+        for line in b"\n".join(identity).decode("utf-8", "replace").split("\n"):
             for rule in line_rules(line, markers):
                 if rule != "email" and not any(f["item"] == scanner.count and f["rule"] == rule for f in scanner.findings):
                     scanner.add(scanner.count, rule)

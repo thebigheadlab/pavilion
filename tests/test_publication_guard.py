@@ -1,6 +1,7 @@
 """Check rejection with synthetic data. Use no real private data or credentials."""
 
 from datetime import date, timedelta
+import base64
 import hashlib
 import importlib.util
 import json
@@ -453,6 +454,82 @@ class GitTests(unittest.TestCase):
         self.assertIn('"operational-marker"', result.stdout)
         self.assertNotIn('"email"', result.stdout)
         self.run_guard("--commit-messages", base + ".." + bad)
+
+    def raw_commit(self, header_lines, message, author=None, committer=None):
+        tree = self.git("write-tree").decode().strip()
+        author = author or "author actor-001 <actor-001> 1700000000 +0000"
+        committer = committer or "committer actor-001 <actor-001> 1700000000 +0000"
+        head = ["tree " + tree, author, committer, *header_lines]
+        data = ("\n".join(head) + "\n\n" + message + "\n").encode()
+        return self.git_input("hash-object", "-t", "commit", "-w", "--stdin", data=data).decode().strip()
+
+    def git_input(self, *args, data, code=0):
+        result = subprocess.run(["git", "-C", str(self.root), *args], input=data, capture_output=True, env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull})
+        self.assertEqual(code, result.returncode, "isolated git operation failed")
+        return result.stdout
+
+    def signature_lines(self, key="gpgsig"):
+        # Synthetic armor-like lines. The random text is generated in memory.
+        noise = [hashlib.sha256(str(n).encode()).digest().hex() for n in range(4)]
+        body = [" " + base64.b64encode(bytes.fromhex(n)).decode() * 2 for n in noise]
+        return [key + " -----BEGIN SYNTHETIC SIGNATURE-----", " ", *body, " -----END SYNTHETIC SIGNATURE-----"]
+
+    def test_signature_header_is_not_scanned(self):
+        base = self.commit("Synthetic base")
+        signed = self.raw_commit(self.signature_lines() + self.signature_lines("gpgsig-sha256"), "Synthetic change")
+        self.run_guard("--commit-messages", signed, markers=self.marker_file())
+        self.run_guard("--commit-messages", base + ".." + signed)
+
+    def test_signed_commit_message_is_still_scanned(self):
+        markers = self.marker_file()
+        base = self.commit("Synthetic base")
+        token = base64.b64encode(hashlib.sha256(b"synthetic-token").digest() + hashlib.sha256(b"two").digest()).decode()
+        armor = "-----BEGIN PGP SIGNATURE-----\n\n" + token + "\n-----END PGP SIGNATURE-----"
+        for message, rule in [
+            ("Uses " + MARKER, "operational-marker"),
+            ("Contact actor-001" + "@" + "invalid.test", "email"),
+            ("Token " + token, "high-entropy"),
+            (armor, "high-entropy"),
+        ]:
+            bad = self.raw_commit(self.signature_lines(), message)
+            result = self.run_guard("--commit-messages", base + ".." + bad, code=1, markers=markers)
+            self.assertIn('"' + rule + '"', result.stdout)
+
+    def test_identity_markers_are_found_in_signed_commits(self):
+        markers = self.marker_file()
+        noreply = "1234+" + MARKER + "@" + "users.noreply.github.com"
+        for author in [
+            "author " + MARKER + " <actor-001> 1700000000 +0000",
+            "author actor-001 <" + noreply + "> 1700000000 +0000",
+        ]:
+            bad = self.raw_commit(self.signature_lines(), "Synthetic change", author=author)
+            result = self.run_guard("--commit-messages", bad, code=1, markers=markers)
+            self.assertIn('"operational-marker"', result.stdout)
+        bad = self.raw_commit(self.signature_lines(), "Synthetic change", committer="committer actor-001 <" + MARKER + "> 1700000000 +0000")
+        self.run_guard("--commit-messages", bad, code=1, markers=markers)
+
+    def test_author_line_inside_signature_is_not_metadata(self):
+        markers = self.marker_file()
+        fake = [" author " + MARKER + " <actor-001> 1700000000 +0000"]
+        sig = self.signature_lines()
+        hidden = self.raw_commit(sig[:2] + fake + sig[2:], "Synthetic change")
+        self.run_guard("--commit-messages", hidden, markers=markers)
+        # A real author marker is still found with the same crafted header.
+        real = "author " + MARKER + " <actor-001> 1700000000 +0000"
+        bad = self.raw_commit(sig[:2] + fake + sig[2:], "Synthetic change", author=real)
+        self.run_guard("--commit-messages", bad, code=1, markers=markers)
+
+    def test_malformed_commit_object_fails_closed(self):
+        tree = self.git("write-tree").decode().strip()
+        meta = "author actor-001 <actor-001> 1700000000 +0000\ncommitter actor-001 <actor-001> 1700000000 +0000"
+        for data in [
+            "tree " + tree + "\n" + meta + "\n",
+            "tree " + tree + "\n" + meta + "\nno blank line",
+            " continuation first\ntree " + tree + "\n" + meta + "\n\nmessage\n",
+            "tree " + tree + "\n\nmessage\n",
+        ]:
+            oid = self.git_input("hash-object", "-t", "commit", "-w", "--stdin", "--literally", data=data.encode()).decode().strip()
+            self.run_guard("--commit-messages", oid, code=2)
 
     def test_commit_messages_reject_bad_ranges(self):
         self.commit("Synthetic base")
