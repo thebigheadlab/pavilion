@@ -1,7 +1,0 @@
-{
-  "version": 1,
-  "executors": {
-    "executor-primary": {"models": ["model-placeholder-a"]},
-    "executor-fallback": {"models": ["model-placeholder-b"]}
-  }
-}
