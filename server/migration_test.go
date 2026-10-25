@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"path/filepath"
 	"strings"
@@ -81,4 +82,37 @@ func TestFailedMigrationRollsBackPartialChanges(t *testing.T) {
 	if version != 4 {
 		t.Fatal("startup did not recover after removing the conflict")
 	}
+}
+
+func TestLegacySessionsRequireFreshTestSignIn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"migrations/001_initial.sql", "migrations/002_indexes.sql"} {
+		migration, err := migrations.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(string(migration)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = db.Exec("CREATE TABLE schema_version(version INTEGER PRIMARY KEY); INSERT INTO schema_version VALUES(1),(2); INSERT INTO owners VALUES('actor-001',X'00')"); err != nil {
+		t.Fatal(err)
+	}
+	token := strings.Repeat("a", 64)
+	digest := sha256.Sum256([]byte(token))
+	if _, err = db.Exec("INSERT INTO sessions(session_id,owner_id,token_hash,device_id,created_at,expires_at) VALUES('session-001','actor-001',?,'device-001',0,9999999999)", digest[:]); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s := openTest(t, path)
+	expect(t, request(t, s, "GET", "/api/channels", token, nil), 401)
+	seed(t, s, "actor-001")
+	fresh := signIn(t, s, "actor-001")
+	expect(t, request(t, s, "GET", "/api/channels", fresh, nil), 200)
 }
