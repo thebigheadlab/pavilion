@@ -59,6 +59,18 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 | Tailscale | The private network connection used for initial access between devices. |
 | Workflow | A defined sequence of actions. Automation can run the sequence after a trigger. |
 
+## Agent policy terms
+
+| Term | Meaning |
+| --- | --- |
+| Admission | The check that accepts or rejects one agent request under the [agent policy](agent-policy.md). The result lists the reasons. |
+| Author and reviewer separation | The rule that a reviewer has a different agent ID and a different model than the author. |
+| Coordinator | An agent that assigns work and does not do the work. A Coordinator always uses low effort. |
+| Exact candidate | One commit, named by a 40-hex SHA, that a review covers. Evidence for another SHA is stale. |
+| Lane | A group of agents under one Coordinator. A Lane holds at most 3 agents. |
+| Reserved wait | A slot held for an agent that waits for a result. It counts toward the Lane and global caps. |
+| Worker | An agent that does assigned work. A Worker uses medium effort unless the request gives evidence, scope, and a stop condition. |
+
 ## Writing reference
 
 ASD-STE100 Simplified Technical English, or STE, is a controlled language for technical text.
