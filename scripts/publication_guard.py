@@ -254,7 +254,7 @@ def staged_scan(root, markers=()):
 
 
 HEADER_LINE = re.compile(rb"^([a-z][a-z0-9-]*) (.+)$")
-IDENTITY_VALUE = re.compile(rb"^[^<>\n]+ <[^<>\n]+> \d+ [+-]\d{4}$")
+IDENTITY_VALUE = re.compile(rb"^[^<>\n]*\S[^<>\n]* <[^<>\s]+> \d+ [+-]\d{4}$")
 OBJECT_ID = re.compile(rb"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 ENCODING_VALUE = re.compile(rb"^[A-Za-z0-9._:-]{1,40}$")
 ARMOR_LINE = re.compile(rb"^[\x20-\x7e]*$")
