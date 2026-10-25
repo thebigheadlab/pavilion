@@ -77,3 +77,52 @@ Do not install external packages without explicit authorization.
 Never copy host-specific instructions or settings into source files.
 Keep reports and scratch files outside the checkout.
 Wait for authorization before you push, open a PR, run benchmarks, or build features.
+
+## Agent policy
+
+These rules are instructions that guide agents.
+No runtime tool enforces them.
+Each agent must follow them.
+Use the terms in the [glossary](docs/glossary.md#agent-policy-terms).
+
+Use the roles in this table.
+A model must have a role.
+
+| Model | Purpose | Note |
+| --- | --- | --- |
+| claude-sonnet-5-5 | Break down tasks. Implement. | Not a default reviewer. |
+| gpt-6.1-sol | Build, debug, test, review. | |
+| gpt-6-luna | Small checks, extraction, docs. | |
+| claude-opus-5-5 | Bounded design, security challenge, review, UI/UX. | Worker. |
+| grok-4.7 | Bounded file, code, test, review. | Validated for text, file, read, write, test, failure, repair, review, handoff, and cancel. Untested for git, worktree isolation, large tasks, network, MCP, and execution errors. |
+| grok-4.6 | Same purposes as grok-4.7. | Untested. |
+| gpt-6-astra | Important unresolved technical questions. | Optional. |
+| claude-fable-5-1 | UI/UX design, alternative analysis. | Optional. |
+
+Do not assign an untested capability to a model. Test it first in a bounded task.
+Use an optional model only when the Coordinator approves it within the approved task scope.
+
+Effort:
+
+- A Worker uses medium effort by default.
+- A Coordinator always uses low effort.
+- Raise Worker effort only with evidence, a bounded scope, and a stop condition.
+
+Capacity:
+
+- A Lane holds at most 3 agents.
+- All Lanes together hold at most 10 agents.
+- Count nested children and Reserved waits in both limits.
+
+Execution environment:
+
+- Use the primary execution environment.
+- Use the fallback only when the primary is unavailable.
+- Do not use paid upgrades.
+
+Review:
+
+- The author and the reviewer must be different agents on different models.
+- A reviewer role must include review. Sonnet is not a default reviewer.
+- Review evidence must name the exact 40-hex commit SHA under review.
+- Review evidence is stale for any other SHA.
