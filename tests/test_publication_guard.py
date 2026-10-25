@@ -1,4 +1,4 @@
-"""Synthetic negative cases. No real identities, credentials, logs, or user data."""
+"""Check rejection with synthetic data. Use no real private data or credentials."""
 
 from datetime import date, timedelta
 import hashlib
@@ -261,8 +261,8 @@ class GitTests(unittest.TestCase):
     def test_relative_candidate_path_hygiene(self):
         p = self.write("logs/capture.txt", "actor-001")
         self.run_guard("--candidate", p, code=0)
-        # An absolute draft's local parents are not publication paths.
-        # A relative publication path is checked in full.
+        # An absolute draft path keeps its source directory names private.
+        # Check the complete relative publication path.
         result = subprocess.run([sys.executable, str(SCRIPT), "--candidate", "logs/capture.txt"], cwd=self.root, capture_output=True)
         self.assertEqual(1, result.returncode)
 

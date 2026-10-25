@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline publication checks. Diagnostics never contain matched content or paths."""
+"""Check content before publication. Diagnostics omit matched content and paths."""
 
 import argparse
 from collections import Counter
@@ -43,7 +43,7 @@ class GuardError(Exception):
 
 class SafeParser(argparse.ArgumentParser):
     def error(self, message):
-        # argparse's default error includes untrusted arguments in stderr.
+        # The default argparse error prints untrusted arguments.
         raise GuardError("invalid command arguments")
 
 
@@ -110,7 +110,7 @@ class Scanner:
         self.count = 0
 
     def add(self, item, rule, line=0):
-        # Only ordinal IDs and rule IDs leave this process.
+        # Report only item numbers and rule IDs.
         self.findings.append({"item": item, "line": line, "rule": rule})
 
     def scan(self, name, data, mode="100644", allow=True):
@@ -164,7 +164,7 @@ def index_entries(root):
 
 
 def has_symlink(path):
-    # Check lexical parents before resolve/open, including paths containing '..'.
+    # Before a file read, check lexical parents, including paths with '..'.
     return any(part.is_symlink() for part in [path, *path.absolute().parents])
 
 
@@ -202,8 +202,8 @@ def staged_scan(root):
     scanner = Scanner(staged_policy(root, entries))
     for name, mode, oid in entries:
         scanner.scan(name, git(root, "cat-file", "blob", oid) if mode in ("100644", "100755") else b"", mode)
-    # Full index blobs cover additions. Review the remaining patch too, because
-    # removed lines, context, and metadata can expose private content.
+    # Full index blobs cover added text. Also check the rest of the patch.
+    # Removed lines, context, and metadata can expose private content.
     patch = staged_patch(root)
     if any(line == b"GIT binary patch" or line.startswith(b"Binary files ") for line in patch.splitlines()):
         scanner.add(0, "binary-diff")
@@ -217,7 +217,7 @@ def review_digest(root):
     for part in [git(root, "ls-files", "--stage", "-z"), staged_patch(root)]:
         digest.update(len(part).to_bytes(8, "big"))
         digest.update(part)
-    # Bind the review to the executed guard and its staged policy.
+    # Include the running guard and staged policy in the review digest.
     digest.update(Path(__file__).read_bytes())
     return digest.hexdigest()
 
@@ -241,7 +241,7 @@ def main():
         for value in args.candidate:
             p = Path(value)
             data, mode = working_bytes(p)
-            # Candidate source directories are private; inspect only the publication name.
+            # Keep candidate source directories private. Check only the publication name.
             scanner.scan(p.name if p.is_absolute() else p.as_posix(), data, mode, allow=False)
         return scanner.finish()
     root = Path(os.fsdecode(git(root, "rev-parse", "--show-toplevel")).strip())
@@ -268,7 +268,7 @@ def main():
         if target.is_relative_to(root):
             raise GuardError("review records must be outside the repository")
         record = {"version": 1, "digest": digest, "checks": dict.fromkeys(CHECKLIST, False)}
-        # Exclusive creation avoids replacing a prior attestation or following symlinks.
+        # Create a new file. Do not replace a review record or follow symlinks.
         with target.open("x", encoding="utf-8") as output:
             json.dump(record, output, indent=2)
             output.write("\n")
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (Exception, KeyboardInterrupt):
-        # The CLI is the diagnostic boundary. Unexpected input/parser errors
-        # must fail closed without echoing arguments or traceback paths.
+        # Report unexpected command input or parser errors without raw details.
+        # Do not echo arguments or traceback paths.
         print("FAIL: check input, policy, repository state, or review record locally; raw diagnostic withheld", file=sys.stderr)
         sys.exit(2)
