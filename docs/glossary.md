@@ -9,7 +9,7 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 
 | Term | Meaning |
 | --- | --- |
-| Allowlist | A file of reviewed exceptions to the `high-entropy` rule. Each exception applies to one exact line and path. |
+| Allowlist | A file of reviewed exceptions to the `high-entropy` and `operational-marker` rules. Each exception applies to one exact line and path. |
 | Artifact | A file or other output that a tool creates for storage or publication. |
 | Bot credentials | Existing authentication data for the repository automation account. |
 | Candidate file | A complete file proposed for publication. An issue title or body can be a candidate file. |
@@ -24,6 +24,8 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 | Index manifest | The list of staged paths, file modes, and object IDs used to bind a review to the index. |
 | Index blob | The complete bytes of one file version in the index. |
 | Lexical parent | A directory component in a path before the filesystem resolves that path. |
+| Marker file | A private local file outside the repository. It lists the operational markers, one per line. The guard reads it from the `PAVILION_PRIVATE_MARKERS` environment variable. |
+| Operational marker | A case-insensitive literal text that the guard must not find in public content. The owner keeps the list private. |
 | Opaque file | A file that the guard cannot validate as permitted text. Media, archives, and databases need separate review. |
 | Publication | A transfer of content to a public repository, issue, PR, attachment, or build artifact. |
 | Pull request, or PR | A request to review and merge a branch into another branch. |
@@ -58,6 +60,20 @@ The [publication safety procedure](publication-safety.md) defines the checks bef
 | T3Code MCP coding delegation | The use of a T3Code MCP connection to assign coding work to an agent. |
 | Tailscale | The private network connection used for initial access between devices. |
 | Workflow | A defined sequence of actions. Automation can run the sequence after a trigger. |
+
+## Agent policy terms
+
+| Term | Meaning |
+| --- | --- |
+| Admission | The check that accepts or rejects one agent request under the [agent policy](agent-policy.md). The result lists the reasons. |
+| Author and reviewer separation | The rule that a reviewer has a different agent ID and a different model than the author. |
+| Coordinator | An agent that assigns work and does not do the work. A Coordinator always uses low effort. |
+| Executor | An opaque ID, such as `executor-primary`, for the place that runs an agent. A private Routing file maps each Executor to its allowed models. |
+| Exact candidate | One commit, named by a 40-hex SHA, that a review covers. Evidence for another SHA is stale. |
+| Lane | A group of agents under one Coordinator. A Lane holds at most 3 agents. |
+| Reserved wait | A slot held for an agent that waits for a result. It counts toward the Lane and global caps. |
+| Routing file | A private JSON file outside the repository. It lists the allowed models for each Executor. The public example `policy/routing.example.json` holds placeholders only. |
+| Worker | An agent that does assigned work. A Worker uses medium effort unless the request gives evidence, scope, and a stop condition. |
 
 ## Writing reference
 

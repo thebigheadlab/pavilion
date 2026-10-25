@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "executors": {"primary": "executor-primary", "fallback": "executor-fallback"},
+  "paid_upgrades": false,
+  "caps": {"lane": 3, "global": 10},
+  "effort": {
+    "levels": ["low", "medium", "high", "xhigh", "max"],
+    "worker_default": "medium",
+    "coordinator": "low",
+    "raised_requires": ["evidence", "scope", "stop_condition"]
+  },
+  "roles": [
+    {"model": "claude-sonnet-5-5", "purposes": ["break_down", "implement"], "optional": false},
+    {"model": "gpt-6.1-sol", "purposes": ["build", "debug", "test", "review"], "optional": false},
+    {"model": "gpt-6-luna", "purposes": ["small_check", "extraction", "docs"], "optional": false},
+    {"model": "claude-opus-5-5", "purposes": ["design", "security_challenge", "review", "ui_ux"], "optional": false},
+    {
+      "model": "grok-4.7", "purposes": ["file", "code", "test", "review"], "optional": false,
+      "validated": ["text", "file", "read", "write", "test", "failure", "repair", "review", "handoff", "cancel"],
+      "untested": ["git", "worktree_isolation", "large_task", "network", "mcp", "executor_error"]
+    },
+    {"model": "grok-4.6", "purposes": ["file", "code", "test", "review"], "optional": false, "validated": [], "status": "untested"},
+    {"model": "gpt-6-astra", "purposes": ["unresolved_question"], "optional": true},
+    {"model": "claude-fable-5-1", "purposes": ["ui_ux", "alternative_analysis"], "optional": true}
+  ]
+}
