@@ -253,25 +253,55 @@ def staged_scan(root, markers=()):
     return scanner
 
 
+HEADER_LINE = re.compile(rb"^([a-z][a-z0-9-]*) (.+)$")
+IDENTITY_VALUE = re.compile(rb"^[^<>\n]+ <[^<>\n]+> \d+ [+-]\d{4}$")
+OBJECT_ID = re.compile(rb"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+ENCODING_VALUE = re.compile(rb"^[A-Za-z0-9._:-]{1,40}$")
+ARMOR_LINE = re.compile(rb"^[\x20-\x7e]*$")
+
+
 def commit_identity_and_message(raw):
     # Parse a commit object. Return the author and committer lines and the message.
-    # Skip tree, parent, signature, encoding, and mergetag fields.
+    # Skip tree, parent, signature, encoding, and mergetag content after a plausibility check.
     head, sep, body = raw.partition(b"\n\n")
     if not sep:
         raise GuardError("malformed commit object")
-    identity, keep, started = [], False, False
+    if b"\r" in head or b"\0" in head:
+        raise GuardError("malformed commit object")
+    identity, key, counts = [], None, {}
     for line in head.split(b"\n"):
         if line.startswith(b" "):
-            if not started:
+            if key is None:
                 raise GuardError("malformed commit object")
-            if keep:
+            if key in (b"author", b"committer"):
                 identity.append(line)
+            elif key in (b"gpgsig", b"gpgsig-sha256", b"mergetag"):
+                if not ARMOR_LINE.match(line[1:]):
+                    raise GuardError("malformed commit object")
+            else:
+                raise GuardError("malformed commit object")
             continue
-        started = True
-        keep = line.startswith((b"author ", b"committer "))
-        if keep:
+        match = HEADER_LINE.match(line)
+        if not match:
+            raise GuardError("malformed commit object")
+        key, value = match.groups()
+        counts[key] = counts.get(key, 0) + 1
+        if key in (b"author", b"committer"):
+            if not IDENTITY_VALUE.match(value):
+                raise GuardError("malformed commit object")
             identity.append(line)
-    if not any(l.startswith(b"author ") for l in identity) or not any(l.startswith(b"committer ") for l in identity):
+        elif key in (b"tree", b"parent"):
+            if not OBJECT_ID.match(value):
+                raise GuardError("malformed commit object")
+        elif key == b"encoding":
+            if not ENCODING_VALUE.match(value):
+                raise GuardError("malformed commit object")
+        elif key in (b"gpgsig", b"gpgsig-sha256", b"mergetag"):
+            if not ARMOR_LINE.match(value):
+                raise GuardError("malformed commit object")
+        else:
+            raise GuardError("malformed commit object")
+    if counts.get(b"author") != 1 or counts.get(b"committer") != 1 or counts.get(b"tree") != 1:
         raise GuardError("malformed commit object")
     return identity, body
 

@@ -531,6 +531,35 @@ class GitTests(unittest.TestCase):
             oid = self.git_input("hash-object", "-t", "commit", "-w", "--stdin", "--literally", data=data.encode()).decode().strip()
             self.run_guard("--commit-messages", oid, code=2)
 
+    def test_strict_header_syntax_fails_closed(self):
+        tree = self.git("write-tree").decode().strip()
+        author = "author actor-001 <actor-001> 1700000000 +0000"
+        committer = "committer actor-001 <actor-001> 1700000000 +0000"
+        marker_line = " author actor-001 <actor-001> 1700000000 +0000"
+        sig = self.signature_lines()
+        cases = {
+            "no space separator": ["tree " + tree, "encoding", author, committer],
+            "empty author": ["tree " + tree, "author ", committer],
+            "empty author identity": ["tree " + tree, "author  <> 1700000000 +0000", committer],
+            "empty committer identity": ["tree " + tree, author, "committer  <> 1700000000 +0000"],
+            "author without epoch": ["tree " + tree, "author actor-001 <actor-001>", committer],
+            "duplicate author": ["tree " + tree, author, author, committer],
+            "duplicate committer": ["tree " + tree, author, committer, committer],
+            "missing committer": ["tree " + tree, author],
+            "cr in header": ["tree " + tree, author, committer, "gpgsig sig\r" + marker_line],
+            "nul in header": ["tree " + tree, author, committer, "encoding utf\0-8"],
+            "bad tree": ["tree " + "z" * 40, author, committer],
+            "short parent": ["tree " + tree, "parent abc123", author, committer],
+            "bad encoding": ["tree " + tree, author, committer, "encoding utf-8 <actor-001>"],
+            "non printable signature": ["tree " + tree, author, committer, sig[0], " \x01\xff", *sig[1:]],
+            "unknown field": ["tree " + tree, author, committer, "x-hidden payload"],
+        }
+        for name, lines in cases.items():
+            data = ("\n".join(lines) + "\n\nSynthetic change\n").encode("latin-1")
+            oid = self.git_input("hash-object", "-t", "commit", "-w", "--stdin", "--literally", data=data).decode().strip()
+            with self.subTest(name):
+                self.run_guard("--commit-messages", oid, code=2)
+
     def test_commit_messages_reject_bad_ranges(self):
         self.commit("Synthetic base")
         self.run_guard("--commit-messages", "--all", code=2)
