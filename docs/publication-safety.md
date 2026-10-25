@@ -73,6 +73,9 @@ The diagnostics show only item numbers, line numbers, and rule IDs.
 
 The commit message scan applies all rules.
 It reads the raw commit object.
+It scans only the author and committer lines and the message.
+It does not scan the tree, parent, signature, or encoding fields.
+A malformed commit object is an error with exit status 2.
 It accepts the public no-reply email form of the bot account in the author and committer lines only.
 It reports any other email address.
 
