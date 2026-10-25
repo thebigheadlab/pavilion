@@ -129,7 +129,7 @@ Tests cover authentication, owner isolation, independent sessions, history after
 sign-out, retries, database reopen, cursor recovery, transaction rollback,
 concurrent retries, schema upgrade, newer-schema rejection, and SQLite settings.
 Client offline storage, drafts, outbox behavior, and local sign-out deletion belong
-to the client lane. CI also runs the Python privacy guard tests and content scans.
+to the client lane.
 
 ## Security limits
 
